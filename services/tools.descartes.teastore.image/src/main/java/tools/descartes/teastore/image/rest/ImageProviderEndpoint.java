@@ -16,6 +16,11 @@ package tools.descartes.teastore.image.rest;
 import java.util.HashMap;
 import java.util.stream.Collectors;
 
+// SecLogTrace SSRF injection imports (JDK built-ins — no new dependency):
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -63,6 +68,98 @@ public class ImageProviderEndpoint {
             Collectors.toMap(e -> e.getKey(), e -> ImageSize.parseImageSize(e.getValue())))))
         .build();
   }
+
+  // ==========================================================================
+  // SecLogTrace: injected CWE-918 (SSRF) sink.
+  //
+  // A DELIBERATE, controlled vulnerability for the SecLogTrace research corpus
+  // (SUT2 / TeaStore). Mirrors the SUT1 injection into Train-Ticket's avatar
+  // service: an image service is given a "fetch an image from a URL" feature
+  // whose destination is not validated, so an external caller can make the
+  // server issue requests to internal hosts it should never reach.
+  //
+  // Cover story is native to the service: an image provider importing a
+  // product image from a remote URL is ordinary functionality.
+  //
+  // DO NOT "fix" this. If a fixed variant is ever wanted for an ablation, add
+  // it as a SEPARATE endpoint (e.g. fetchFromUrlSafe), so both traffic
+  // patterns remain collectible.
+  //
+  // Naive implementation by design: no scheme restriction (http/https/file/
+  // ftp all pass), no host validation (private ranges, cluster-internal DNS
+  // names, localhost all allowed), no port restriction, default redirect
+  // handling. This is the most common real-world SSRF root cause.
+  //
+  // The outbound request below uses java.net.HttpURLConnection (a JDK
+  // built-in — no new dependency, and the OpenTelemetry Java agent already
+  // instruments it, so the outbound fetch is captured as a child span
+  // automatically — the SUT2 analogue of SUT1's urllib span).
+  // ==========================================================================
+  /**
+   * SecLogTrace SSRF sink. Fetches the given URL server-side and reports the
+   * outcome. Accepts a raw string body containing the target URL.
+   * @param srcUrl the URL to fetch, server-side, with NO validation.
+   * @return a small JSON object describing what happened (status, bytes).
+   */
+  @POST
+  @Path("fetchFromUrl")
+  @Consumes({ "text/plain", "application/json" })
+  public Response fetchFromUrl(String srcUrl) {
+    if (srcUrl == null || srcUrl.trim().isEmpty()) {
+      return Response.status(400)
+          .entity("{\"success\":false,\"message\":\"srcUrl is required\"}")
+          .build();
+    }
+    // strip accidental surrounding quotes if a JSON string was sent
+    String target = srcUrl.trim();
+    if (target.startsWith("\"") && target.endsWith("\"") && target.length() > 1) {
+      target = target.substring(1, target.length() - 1);
+    }
+
+    HttpURLConnection conn = null;
+    try {
+      // The actual SSRF: the server issues this request, from inside the
+      // compose network, to whatever destination the caller specified.
+      URL url = new URL(target);
+      conn = (HttpURLConnection) url.openConnection();
+      conn.setConnectTimeout(10000);
+      conn.setReadTimeout(10000);
+      conn.setRequestMethod("GET");
+      conn.setRequestProperty("User-Agent", "teastore-image-service");
+
+      int status = conn.getResponseCode();
+      long bytes = 0;
+      try (InputStream in = conn.getInputStream()) {
+        byte[] buf = new byte[4096];
+        int r;
+        while ((r = in.read(buf)) != -1) {
+          bytes += r;
+        }
+      } catch (Exception readEx) {
+        // fall through — status may still be meaningful
+      }
+      return Response.ok()
+          .entity("{\"success\":true,\"fetchedStatus\":" + status
+              + ",\"fetchedBytes\":" + bytes + "}")
+          .build();
+
+    } catch (Exception e) {
+      // Deliberately surface the failure type. Distinguishing "connection
+      // refused" vs "host unreachable" vs "timeout" vs a 4xx/5xx is a classic
+      // SSRF fingerprinting oracle — realistic for naive implementations and
+      // useful discriminative signal for the corpus.
+      return Response.status(502)
+          .entity("{\"success\":false,\"error\":\""
+              + e.getClass().getSimpleName() + ": "
+              + String.valueOf(e.getMessage()).replace("\"", "'") + "\"}")
+          .build();
+    } finally {
+      if (conn != null) {
+        conn.disconnect();
+      }
+    }
+  }
+  // ======================= end SecLogTrace SSRF injection ====================
 
   /**
    * Signals the image provider to regenerate all product images. This is usually necessary if the product database
