@@ -4,7 +4,15 @@
 
     <!-- Default configuration and other configuration values here.    -->
 	<JarScanner scanClassPath="false" />
-	<Loader delegate="true"/>
+	<!--
+		Web-application-first class loading. The Kieker agent jar on the system
+		class path bundles SLF4J 2.0; parent-first delegation would let that
+		shadow the application's SLF4J 1.7.x + Logback binding and force the
+		SLF4J no-operation logger. Web-application-first lets each WAR resolve
+		SLF4J and Logback from its own WEB-INF/lib, so Logback binds and the
+		MDC (trace_id, span_id) is populated.
+	-->
+	<Loader delegate="false"/>
     <!-- Service registration settings, almost always required. -->
     <Environment name="servicePort" value="%%PLACEHOLDER%%"
     	type="java.lang.String" override="false"/>

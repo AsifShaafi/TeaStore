@@ -14,11 +14,22 @@
 		<finalName>tools.descartes.teastore.kieker.probes</finalName>
 	</build>
 	<dependencies>
+		<!--
+			The aspectj classifier is a shaded uber-jar that bundles SLF4J 2.0.
+			It is required only to compile against the Kieker AspectJ probe base
+			classes; at runtime those classes are supplied by the Kieker agent
+			(/kieker/agent/agent.jar). Keeping it off the packaged classpath
+			(provided scope) prevents its bundled SLF4J 2.0 from shadowing the
+			SLF4J 1.7.x + Logback binding in the service WARs. The unshaded
+			kieker artifact (pulled via entities) still provides the Kieker
+			runtime classes.
+		-->
 		<dependency>
 			<groupId>net.kieker-monitoring</groupId>
 			<artifactId>kieker</artifactId>
 			<version>2.0.0</version>
 			<classifier>aspectj</classifier>
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<aspectj>
+
+  <!-- Register the SecLogTrace request-boundary aspect for load-time weaving.
+       This file sits at the classpath root (not META-INF) because the runtime
+       weaver is configured with
+       -Dorg.aspectj.weaver.loadtime.configuration=aop.xml, which loads only
+       root-level aop.xml resources. -->
+  <aspects>
+    <aspect name="tools.descartes.teastore.registryclient.tracing.SecLogTraceAspect"/>
+  </aspects>
+
+  <!--
+    Weave candidate set. The include covers all TeaStore code; the excludes
+    remove the entity classes and the client-side REST wrappers in
+    registryclient.rest, so outbound client calls are not logged as if they
+    were server endpoints. The aspect's own package
+    (registryclient.tracing) is deliberately left weavable so the load-time
+    weaver augments the aspect class with its aspectOf() accessor. Combined
+    with the pointcut in SecLogTraceAspect, only each service's own
+    server-side rest/servlet methods are woven. This scope is uniform and
+    attack-blind.
+  -->
+  <weaver options="-Xlint:ignore">
+    <include within="tools.descartes.teastore..*"/>
+    <exclude within="tools.descartes.teastore.entities..*"/>
+    <exclude within="tools.descartes.teastore.registryclient.rest..*"/>
+  </weaver>
+
+</aspectj>
