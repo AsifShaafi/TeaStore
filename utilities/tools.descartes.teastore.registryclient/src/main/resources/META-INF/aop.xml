@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<aspectj>
+
+  <!-- Register the SecLogTrace request-boundary aspect for load-time weaving. -->
+  <aspects>
+    <aspect name="tools.descartes.teastore.registryclient.tracing.SecLogTraceAspect"/>
+  </aspects>
+
+  <!--
+    Weave candidate set. The include covers all TeaStore code; the two excludes
+    remove the entity classes and the whole registryclient module (which holds
+    the client-side REST wrappers and the aspect itself). Combined with the
+    pointcut in SecLogTraceAspect, only each service's own server-side
+    rest/servlet methods are woven. This scope is uniform and attack-blind.
+  -->
+  <weaver options="-Xlint:ignore">
+    <include within="tools.descartes.teastore..*"/>
+    <exclude within="tools.descartes.teastore.entities..*"/>
+    <exclude within="tools.descartes.teastore.registryclient..*"/>
+  </weaver>
+
+</aspectj>

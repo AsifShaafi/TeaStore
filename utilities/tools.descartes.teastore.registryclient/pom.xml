@@ -65,10 +65,10 @@
 			<artifactId>slf4j-api</artifactId>
 			<version>${slf4j.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<version>${slf4j.version}</version>
+		<dependency> <!-- SecLogTrace: AspectJ annotations for the LTW aspect -->
+			<groupId>org.aspectj</groupId>
+			<artifactId>aspectjrt</artifactId>
+			<version>1.9.19</version>
 		</dependency>
 		<dependency>
 			<groupId>io.reactivex</groupId>
