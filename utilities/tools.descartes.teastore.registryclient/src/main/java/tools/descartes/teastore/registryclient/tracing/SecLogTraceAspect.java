@@ -1,10 +1,17 @@
 package tools.descartes.teastore.registryclient.tracing;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +49,18 @@ public class SecLogTraceAspect {
   private static final int MAX_ARG_CHARS = 256;
 
   /**
+   * Request-parameter binding names whose values are credentials and must never
+   * be written to the log, matched case-insensitively. Applied uniformly to
+   * every woven endpoint, so the redaction carries no attack-specific knowledge.
+   */
+  private static final Set<String> SENSITIVE_PARAM_NAMES =
+      new HashSet<>(Arrays.asList("password", "passwd", "pwd"));
+
+  /** Per-method cache of which argument positions hold a credential value. */
+  private static final ConcurrentHashMap<Method, boolean[]> REDACT_MASKS =
+      new ConcurrentHashMap<>();
+
+  /**
    * Weave scope: public methods in any service's own rest or servlet package.
    * registryclient and entities are excluded in aop.xml, so the client-side
    * REST wrappers and the entity classes are never matched.
@@ -57,7 +76,7 @@ public class SecLogTraceAspect {
     long startNanos = System.nanoTime();
 
     if (log.isInfoEnabled()) {
-      log.info("[{}][ENTRY] args={}", method, formatArgs(jp.getArgs()));
+      log.info("[{}][ENTRY] args={}", method, formatArgs(jp));
     }
 
     try {
@@ -75,19 +94,74 @@ public class SecLogTraceAspect {
     }
   }
 
-  /** Render arguments as a bounded, single-line, type-tagged string. */
-  private static String formatArgs(Object[] args) {
+  /**
+   * Render arguments as a bounded, single-line, type-tagged string. Positions
+   * bound to a credential parameter are emitted as {@code ***} and never
+   * rendered.
+   */
+  private static String formatArgs(ProceedingJoinPoint jp) {
+    Object[] args = jp.getArgs();
     if (args == null || args.length == 0) {
       return "[]";
     }
+    boolean[] redact = redactMask((MethodSignature) jp.getSignature());
     StringBuilder sb = new StringBuilder("[");
     for (int i = 0; i < args.length; i++) {
       if (i > 0) {
         sb.append(", ");
       }
-      sb.append(describe(args[i]));
+      if (i < redact.length && redact[i]) {
+        sb.append("***");
+      } else {
+        sb.append(describe(args[i]));
+      }
     }
     return sb.append(']').toString();
+  }
+
+  /**
+   * Build (and cache) the per-position redaction mask for a method: a position
+   * is redacted when its JAX-RS binding name (for example
+   * {@code @QueryParam("password")}) is in SENSITIVE_PARAM_NAMES. Keying on the
+   * declared binding keeps the rule uniform across endpoints and free of any
+   * attack-specific knowledge.
+   */
+  private static boolean[] redactMask(MethodSignature signature) {
+    return REDACT_MASKS.computeIfAbsent(
+        signature.getMethod(), SecLogTraceAspect::computeRedactMask);
+  }
+
+  private static boolean[] computeRedactMask(Method method) {
+    Annotation[][] paramAnnotations = method.getParameterAnnotations();
+    boolean[] mask = new boolean[paramAnnotations.length];
+    for (int i = 0; i < paramAnnotations.length; i++) {
+      for (Annotation annotation : paramAnnotations[i]) {
+        if (isSensitiveBinding(annotation)) {
+          mask[i] = true;
+          break;
+        }
+      }
+    }
+    return mask;
+  }
+
+  /**
+   * True when the annotation is a JAX-RS parameter binding (javax or jakarta
+   * {@code ws.rs}, e.g. QueryParam/FormParam/HeaderParam) whose bound name is a
+   * credential name. Read reflectively so the aspect needs no JAX-RS dependency.
+   */
+  private static boolean isSensitiveBinding(Annotation annotation) {
+    String type = annotation.annotationType().getName();
+    if (!type.startsWith("jakarta.ws.rs.") && !type.startsWith("javax.ws.rs.")) {
+      return false;
+    }
+    try {
+      Object value = annotation.annotationType().getMethod("value").invoke(annotation);
+      return value instanceof String
+          && SENSITIVE_PARAM_NAMES.contains(((String) value).toLowerCase(Locale.ROOT));
+    } catch (ReflectiveOperationException e) {
+      return false;
+    }
   }
 
   /**
@@ -95,10 +169,9 @@ public class SecLogTraceAspect {
    * length, never dumped, so image bytes do not explode the log. Value strings
    * are truncated to MAX_ARG_CHARS.
    *
-   * <p>REDACTION NOTE: the auth login endpoint receives a plaintext password
-   * argument. Do not log it. Before freezing the corpus, add a redaction branch
-   * here (for example, by the declaring type or parameter position of the auth
-   * endpoint) so password values never reach the logs.
+   * <p>Credential arguments (e.g. the plaintext password on the auth login
+   * endpoint) are redacted earlier, in {@link #formatArgs}, keyed on the
+   * parameter's JAX-RS binding name, so they never reach this renderer.
    */
   private static String describe(Object arg) {
     if (arg == null) {
