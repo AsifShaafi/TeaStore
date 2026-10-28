@@ -25,6 +25,10 @@
     <include within="tools.descartes.teastore..*"/>
     <exclude within="tools.descartes.teastore.entities..*"/>
     <exclude within="tools.descartes.teastore.registryclient.rest..*"/>
+    <!-- Exclude the generic servlet base so each webui request logs once, at the
+         concrete subclass handler (handleGETRequest / handlePOSTRequest), rather
+         than also at AbstractUIServlet.doGet/doPost. -->
+    <exclude within="tools.descartes.teastore.webui.servlet.AbstractUIServlet"/>
   </weaver>
 
 </aspectj>
