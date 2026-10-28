@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Empty AspectJ load-time weaving configuration, mounted over the base image's
+  /usr/local/tomcat/lib/aop.xml in docker-compose_otel.yaml.
+
+  The base image ships a Kieker aop.xml at that path. The AspectJ weaver
+  aggregates every aop.xml on the classpath, so that file's <weaver> excludes
+  (e.g. AbstractCRUDEndpoint, which the persistence endpoints inherit) and its
+  concrete-aspect (which fails to register and disables the weaver on some
+  class loaders) would otherwise apply to the request-boundary logging weave as
+  well. Mounting this empty file in the OTel scenario removes the Kieker
+  weaving config from the aggregate, leaving only the SecLogTrace aop.xml in
+  registryclient. The base image is unchanged, so the Kieker Compose scenario
+  still uses the real Kieker aop.xml.
+-->
+<aspectj>
+</aspectj>

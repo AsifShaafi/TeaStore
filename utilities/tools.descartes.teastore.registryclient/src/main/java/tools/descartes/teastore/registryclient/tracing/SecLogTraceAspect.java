@@ -61,13 +61,20 @@ public class SecLogTraceAspect {
       new ConcurrentHashMap<>();
 
   /**
-   * Weave scope: public methods in any service's own rest or servlet package.
-   * registryclient and entities are excluded in aop.xml, so the client-side
-   * REST wrappers and the entity classes are never matched.
+   * Weave scope: each service's own server-side request-boundary methods —
+   * public REST methods, public and protected servlet handlers (webui's
+   * handlers are protected), and the shared JAX-RS CRUD base
+   * ({@code AbstractCRUDEndpoint}) whose inherited methods are the persistence
+   * endpoints' actual entry points. The entity classes and the client-side REST
+   * wrappers ({@code registryclient.rest}) are excluded in aop.xml, so
+   * client-side calls and entities are never matched. The scope is fixed and
+   * independent of any attack class.
    */
   @Around(
       "execution(public * tools.descartes.teastore..rest..*(..)) "
-      + "|| execution(public * tools.descartes.teastore..servlet..*(..))")
+      + "|| execution(public * tools.descartes.teastore..servlet..*(..)) "
+      + "|| execution(protected * tools.descartes.teastore..servlet..*(..)) "
+      + "|| execution(public * tools.descartes.teastore.registryclient.util.AbstractCRUDEndpoint.*(..))")
   public Object logRequestBoundary(ProceedingJoinPoint jp) throws Throwable {
     Class<?> targetType = jp.getSignature().getDeclaringType();
     Logger log = LOGGERS.computeIfAbsent(targetType, LoggerFactory::getLogger);

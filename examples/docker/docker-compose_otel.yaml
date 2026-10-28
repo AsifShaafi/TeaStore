@@ -55,6 +55,7 @@ services:
     volumes:
       - ./opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
       - ./aspectjweaver.jar:/otel/aspectjweaver.jar:ro
+      - ./empty-aop.xml:/usr/local/tomcat/lib/aop.xml:ro
     environment:
       HOST_NAME: "persistence"
       REGISTRY_HOST: "registry"
@@ -81,6 +82,7 @@ services:
     volumes:
       - ./opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
       - ./aspectjweaver.jar:/otel/aspectjweaver.jar:ro
+      - ./empty-aop.xml:/usr/local/tomcat/lib/aop.xml:ro
     environment:
       HOST_NAME: "auth"
       REGISTRY_HOST: "registry"
@@ -103,6 +105,7 @@ services:
     volumes:
       - ./opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
       - ./aspectjweaver.jar:/otel/aspectjweaver.jar:ro
+      - ./empty-aop.xml:/usr/local/tomcat/lib/aop.xml:ro
     environment:
       HOST_NAME: "image"
       REGISTRY_HOST: "registry"
@@ -127,6 +130,7 @@ services:
     volumes:
       - ./opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
       - ./aspectjweaver.jar:/otel/aspectjweaver.jar:ro
+      - ./empty-aop.xml:/usr/local/tomcat/lib/aop.xml:ro
     environment:
       HOST_NAME: "recommender"
       REGISTRY_HOST: "registry"
@@ -149,6 +153,7 @@ services:
     volumes:
       - ./opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
       - ./aspectjweaver.jar:/otel/aspectjweaver.jar:ro
+      - ./empty-aop.xml:/usr/local/tomcat/lib/aop.xml:ro
     environment:
       HOST_NAME: "webui"
       REGISTRY_HOST: "registry"
